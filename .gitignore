@@ -1,0 +1,7 @@
+build/
+*.pyc
+.hg/
+*/.hg/
+.ropeproject/
+*/.ropeproject/
+*.swp
