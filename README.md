@@ -6,6 +6,8 @@ This is a fork of <https://bitbucket.org/nikratio/mlabwrap> to fix some bugs.
 
 I'm not familiar with hg. But I may checkout updates from <https://bitbucket.org/nikratio/mlabwrap>.
 
+Thanks [this site](http://obasic.net/how-to-install-mlabwrap-on-windows), I made it run on Windows.
+
 ## Platform
 
 The setup.py is configurated for Windows platform, with Python 2.7.2 **64 bit** and Matlab **64 bit**.
