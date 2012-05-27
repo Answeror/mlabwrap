@@ -79,14 +79,6 @@ if PYTHON_INCLUDE_DIR is None and not USE_NUMERIC:
         except ImportError:
             print >> sys.stderr, "CANNOT FIND EITHER NUMPY *OR* NUMERIC"
 
-def handleRemoveReadonly(func, path, exc):
-    excvalue = exc[1]
-    if func in (os.rmdir, os.remove) and excvalue.errno == errno.EACCES:
-        os.chmod(path, stat.S_IRWXU| stat.S_IRWXG| stat.S_IRWXO) # 0777
-        func(path)
-    else:
-        raise
-
 def matlab_params(cmd, is_windows, extra_args):
     fh = tempfile.NamedTemporaryFile(delete=False)
     param_fname = fh.name
@@ -112,9 +104,6 @@ PLEASE MAKE SURE matlab IS IN YOUR PATH!
     finally:
         try:
             os.unlink(fh.name)
-            #os.chmod(param_fname, 777)
-            #os.remove(param_fname)
-            #shutil.rmtree(param_fname, ignore_errors=False, onerror=handleRemoveReadonly)
         except OSError, msg: # FIXME
             print >> sys.stderr, """
 WINDOWS SPECIFIC ISSUE? Unable to remove %s; please delete it manually
