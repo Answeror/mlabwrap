@@ -44,10 +44,12 @@ VC_DIR='C:/Program Files (x86)/Microsoft Visual Studio 9.0/VC'
 ####################################################################
 # *******************************************************************
 
+import shutil
 from distutils.core import setup, Extension
 import os, os.path, glob
 import sys
 import re
+import tempfile
 from tempfile import mktemp
 if sys.version_info < (2,2):
     print >> sys.stderr, "You need at least python 2.2"
@@ -77,8 +79,17 @@ if PYTHON_INCLUDE_DIR is None and not USE_NUMERIC:
         except ImportError:
             print >> sys.stderr, "CANNOT FIND EITHER NUMPY *OR* NUMERIC"
 
+def handleRemoveReadonly(func, path, exc):
+    excvalue = exc[1]
+    if func in (os.rmdir, os.remove) and excvalue.errno == errno.EACCES:
+        os.chmod(path, stat.S_IRWXU| stat.S_IRWXG| stat.S_IRWXO) # 0777
+        func(path)
+    else:
+        raise
+
 def matlab_params(cmd, is_windows, extra_args):
-    param_fname = mktemp()
+    fh = tempfile.NamedTemporaryFile(delete=False)
+    param_fname = fh.name
     # XXX I have no idea why '\n' instead of the ``%c...,10`` hack fails - bug
     # in matlab's cmdline parsing? (``call`` doesn't do shell mangling, so that's not it...)
     code = ("fid = fopen('%s', 'wt');" % param_fname +
@@ -94,14 +105,16 @@ def matlab_params(cmd, is_windows, extra_args):
             sys.exit('''INSTALL ABORT: %r RETURNED ERROR CODE %d
 PLEASE MAKE SURE matlab IS IN YOUR PATH!
 ''' % (" ".join(cmd), error))
-        fh = open(param_fname)
-        ver, pth, platform = iter(fh)
-        return (float(re.match(r'\d+.\d+',ver).group()),
-                pth.rstrip(), platform.rstrip().lower())
+        with open(param_fname) as fh:
+            ver, pth, platform = iter(fh)
+            return (float(re.match(r'\d+.\d+',ver).group()),
+                    pth.rstrip(), platform.rstrip().lower())
     finally:
-        if fh: fh.close()
         try:
-            os.remove(param_fname)
+            os.unlink(fh.name)
+            #os.chmod(param_fname, 777)
+            #os.remove(param_fname)
+            #shutil.rmtree(param_fname, ignore_errors=False, onerror=handleRemoveReadonly)
         except OSError, msg: # FIXME
             print >> sys.stderr, """
 WINDOWS SPECIFIC ISSUE? Unable to remove %s; please delete it manually
