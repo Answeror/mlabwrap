@@ -145,7 +145,7 @@ def main(argv):
     PLEASE MAKE SURE matlab IS IN YOUR PATH!
     ''' % (" ".join(cmd), error))
                 return 1
-            with open(param_fname) as fh:
+            with open(param_fname, 'r') as fh:
                 ver, pth, platform = iter(fh)
                 return (float(re.match(r'\d+.\d+', ver).group()), \
                         pth.rstrip(), platform.rstrip().lower())
@@ -167,20 +167,20 @@ def main(argv):
             cmd += ["-wait"]
         else:
             extra_args = dict(stdout=open('/dev/null', 'wb'))
-        # FIXME: it is necessary to call matlab to figure out unspecified install
-        # parameters but only if the user actually intends to build something
-        # (e.g. not for making a sdist or running a clean or --author-email etc.).
-        # Unfortunately I can't see a clean way to do that, so this nasty kludge
-        # attempts to avoid calling matlab unless required.
-        if len(sys.argv) > 1 and not (
-            re.search("sdist|clean", sys.argv[1]) or
-            len(sys.argv) == 2 and sys.argv[1].startswith('--') or
-            sys.argv[-1].startswith('--help')):
-            queried_version, queried_dir, queried_platform_dir = matlab_params(cmd, windows, extra_args)
-        else:
-            queried_version, queried_dir, queried_platform_dir = ["WHATEVER"] * 3
-        MATLAB_VERSION = MATLAB_VERSION or queried_version
-        MATLAB_DIR = MATLAB_DIR or queried_dir
+        ## FIXME: it is necessary to call matlab to figure out unspecified install
+        ## parameters but only if the user actually intends to build something
+        ## (e.g. not for making a sdist or running a clean or --author-email etc.).
+        ## Unfortunately I can't see a clean way to do that, so this nasty kludge
+        ## attempts to avoid calling matlab unless required.
+        #if len(sys.argv) > 1 and not (
+            #re.search("sdist|clean", sys.argv[1]) or
+            #len(sys.argv) == 2 and sys.argv[1].startswith('--') or
+            #sys.argv[-1].startswith('--help')):
+            #queried_version, queried_dir, queried_platform_dir = matlab_params(cmd, windows, extra_args)
+        #else:
+            #queried_version, queried_dir, queried_platform_dir = ["WHATEVER"] * 3
+        #MATLAB_VERSION = MATLAB_VERSION or queried_version
+        #MATLAB_DIR = MATLAB_DIR or queried_dir
         PLATFORM_DIR = 'win{}/microsoft'.format(PLATFORM)
 
     if windows:

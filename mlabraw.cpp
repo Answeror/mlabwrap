@@ -220,7 +220,7 @@ static PyObject *mx2char(const mxArray *pArray)
   }
 
 #ifdef PY3K
-  lRetval = PyUnicode_FromString(buf);
+  lRetval = PyUnicode_DecodeFSDefault(buf);
 #else
   lRetval = (PyStringObject *)PyString_FromString(buf);
 #endif
