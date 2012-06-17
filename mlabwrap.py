@@ -359,7 +359,7 @@ class MlabWrap(object):
         self._clear_call_args = True
 
         self._closed = False
-        
+
         """Remove the function args from matlab workspace after each function
         call. Otherwise they are left to be (partly) overwritten by the next
         function call. This saves a function call in matlab but means that the
@@ -534,7 +534,7 @@ class MlabWrap(object):
                              "','".join(tempargs))
     # this is really raw, no conversion of [[]] -> [], whatever
     def _get(self, name, remove=False):
-        r"""Directly access a variable in matlab space. 
+        r"""Directly access a variable in matlab space.
 
         This should normally not be used by user code."""
         # FIXME should this really be needed in normal operation?
@@ -569,7 +569,7 @@ class MlabWrap(object):
 
     def _set(self, name, value):
         r"""Directly set a variable `name` in matlab space to `value`.
-        
+
         This should normally not be used in user code."""
         if isinstance(value, MlabObjectProxy):
             mlabraw.eval(self._session, "%s = %s;" % (name, value._name))
@@ -593,14 +593,14 @@ class MlabWrap(object):
         object on-the-fly."""
         if re.search(r'\W', attr): # work around ipython <= 0.7.3 bug
             raise ValueError("Attributes don't look like this: %r" % attr)
-        if attr.startswith('__'): raise AttributeError, attr
+        if attr.startswith('__'): raise AttributeError(attr)
         assert not attr.startswith('_') # XXX
         # print_ -> print
         if attr[-1] == "_": name = attr[:-1]
         else             : name = attr
         try:
             nout = self._do("nargout('%s')" % name)
-        except mlabraw.error, msg:
+        except mlabraw.error as msg:
             typ = numpy.ravel(self._do("exist('%s')" % name))[0]
             if   typ == 0: # doesn't exist
                 raise AttributeError("No such matlab object: %s" % name)

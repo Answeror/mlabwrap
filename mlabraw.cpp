@@ -117,6 +117,17 @@
 
 */
 #include <Python.h> // !!! must come before standard includes
+#include <bytesobject.h> // byte string
+#include <unicodeobject.h> // unicode
+
+#if PY_MAJOR_VERSION >= 3
+    #define PY3K
+#endif
+
+#ifdef PY3K
+    #define PyInt_Check(x) PyLong_Check(x)
+#endif
+
 #include <stdarg.h>
 #include <cstdio>
 #define MLABRAW_VERSION "1.0.1"
@@ -155,9 +166,9 @@
 
 static inline mxArray* _getMatlabVar(PyObject *lHandle, char *lName){
 #ifdef _V6_5_OR_LATER
-  return engGetVariable((Engine *)PyCObject_AsVoidPtr(lHandle), lName);
+  return engGetVariable((Engine *)PyCapsule_GetPointer(lHandle, NULL), lName);
 #else
-  return engGetArray((Engine *)PyCObject_AsVoidPtr(lHandle), lName);
+  return engGetArray((Engine *)PyCapsule_GetPointer(lHandle, NULL), lName);
 #endif
 }
 
@@ -182,11 +193,11 @@ static inline bool my_snprintf(char *dst, size_t size, const char *fmt, ...)
 }
 
 // FIXME: add string array support
-static PyStringObject *mx2char(const mxArray *pArray)
+static PyObject *mx2char(const mxArray *pArray)
 {
   size_t buflen;
   char *buf;
-  PyStringObject *lRetval;
+  PyObject *lRetval;
   if (mxGetM(pArray) > 1) {
     PyErr_SetString(mlabraw_error, "Only 1 Dimensional strings are currently supported");
     return NULL;
@@ -195,7 +206,6 @@ static PyStringObject *mx2char(const mxArray *pArray)
 
   //buf = (char *)mxCalloc(buflen, sizeof(char));
   //pyassert(buf, "Out of MATLAB(TM) memory");
-
   //if (mxGetString(pArray, buf, buflen)) {
     //PyErr_SetString(mlabraw_error, "Unable to extract MATLAB(TM) string");
     //mxFree(buf);
@@ -209,7 +219,11 @@ static PyStringObject *mx2char(const mxArray *pArray)
     return NULL;
   }
 
+#ifdef PY3K
+  lRetval = PyUnicode_FromString(buf);
+#else
   lRetval = (PyStringObject *)PyString_FromString(buf);
+#endif
   mxFree(buf);
   return lRetval;
 	error_return: return NULL;
@@ -539,7 +553,11 @@ static mxArray *char2mx(const PyObject *pSrc)
 {
   mxArray *lDst = NULL;
 
+#ifdef PY3K
+  lDst = mxCreateString(PyBytes_AsString(const_cast<PyObject *>(pSrc)));
+#else
   lDst = mxCreateString(PyString_AsString(const_cast<PyObject *>(pSrc)));
+#endif
   if (lDst == NULL) {
     PyErr_SetString(mlabraw_error, "Unable to create MATLAB(TM) string");
     return NULL;
@@ -587,7 +605,7 @@ PyObject * mlabraw_open(PyObject *, PyObject *args)
     PyErr_SetString(mlabraw_error, "Unable to start MATLAB(TM) engine");
     return NULL;
   }
-  return PyCObject_FromVoidPtr(ep, NULL);
+  return PyCapsule_New(ep, NULL, NULL);
 }
 
 
@@ -606,7 +624,7 @@ PyObject * mlabraw_close(PyObject *, PyObject *args)
 
   if (! PyArg_ParseTuple(args, "O:close", &lHandle)) return NULL;
 
-  if (engClose((Engine *)PyCObject_AsVoidPtr(lHandle)) != 0) {
+  if (engClose((Engine *)PyCapsule_GetPointer(lHandle, NULL)) != 0) {
     PyErr_SetString(mlabraw_error, "Unable to close session");
     return NULL;
   }
@@ -644,7 +662,7 @@ PyObject * mlabraw_eval(PyObject *, PyObject *args)
   PyObject *ret;
   PyObject *lHandle;
   if (! PyArg_ParseTuple(args, "Os:eval", &lHandle, &lStr)) return NULL;
-  if (! PyCObject_Check(lHandle)) {
+  if (! PyCapsule_CheckExact(lHandle)) {
     PyErr_SetString(PyExc_TypeError, "Invalid object passed as mlabraw session handle");
 	return NULL;
   }
@@ -656,8 +674,8 @@ PyObject * mlabraw_eval(PyObject *, PyObject *args)
 	  return NULL;
   }
   // std::cout << "DEBUG: CMD " << cmd << std::endl << std::flush;
-  engOutputBuffer((Engine *)PyCObject_AsVoidPtr(lHandle), retStr, BUFSIZE-1);
-  if (engEvalString((Engine *)PyCObject_AsVoidPtr(lHandle), cmd) != 0) {
+  engOutputBuffer((Engine *)PyCapsule_GetPointer(lHandle, NULL), retStr, BUFSIZE-1);
+  if (engEvalString((Engine *)PyCapsule_GetPointer(lHandle, NULL), cmd) != 0) {
     //std::cout << "DEBUG: RETURN " << retStr << std::endl << std::flush;
     PyErr_SetString(mlabraw_error, retStr);
     return NULL;
@@ -676,8 +694,8 @@ PyObject * mlabraw_eval(PyObject *, PyObject *args)
     __mlabraw_error = (bool)*mxGetPr(lArray);
     mxDestroyArray(lArray);
     if (__mlabraw_error) {
-      engOutputBuffer((Engine *)PyCObject_AsVoidPtr(lHandle), retStr2, BUFSIZE-1);
-      if (engEvalString((Engine *)PyCObject_AsVoidPtr(lHandle),
+      engOutputBuffer((Engine *)PyCapsule_GetPointer(lHandle, NULL), retStr2, BUFSIZE-1);
+      if (engEvalString((Engine *)PyCapsule_GetPointer(lHandle, NULL),
                         "disp(subsref(lasterror(),struct('type','.','subs','message')))") != 0) {
         PyErr_SetString(mlabraw_error, "THIS SHOULD NOT HAVE HAPPENED!!!");
         return NULL;
@@ -687,7 +705,11 @@ PyObject * mlabraw_eval(PyObject *, PyObject *args)
     }
   }
   if (strncmp(">> ", retStr, 3) == 0) { retStr += 3; } //FIXME
+#ifdef PY3K
+  ret = PyUnicode_FromString(retStr);
+#else
   ret = (PyObject *)PyString_FromString(retStr);
+#endif
   return ret;
 }
 
@@ -702,12 +724,12 @@ PyObject * mlabraw_oldeval(PyObject *, PyObject *args)
   PyObject *lHandle;
 
   if (! PyArg_ParseTuple(args, "Os:eval", &lHandle, &lStr)) return NULL;
-  if (! PyCObject_Check(lHandle)) {
+  if (! PyCapsule_CheckExact(lHandle)) {
     PyErr_SetString(PyExc_TypeError, "Invalid object passed as mlabraw session handle");
     return NULL;
   }
-  engOutputBuffer((Engine *)PyCObject_AsVoidPtr(lHandle), retStr, BUFSIZE-1);
-  if (engEvalString((Engine *)PyCObject_AsVoidPtr(lHandle), lStr) != 0) {
+  engOutputBuffer((Engine *)PyCapsule_GetPointer(lHandle, NULL), retStr, BUFSIZE-1);
+  if (engEvalString((Engine *)PyCapsule_GetPointer(lHandle, NULL), lStr) != 0) {
     PyErr_SetString(mlabraw_error,
                    "Unable to evaluate string in MATLAB(TM) workspace");
     return NULL;
@@ -729,7 +751,11 @@ PyObject * mlabraw_oldeval(PyObject *, PyObject *args)
     PyErr_SetString(mlabraw_error, retStr + 4); // skip "??? "
     return NULL;
   }
+#ifdef PY3K
+  ret = PyUnicode_FromString(retStr);
+#else
   ret = (PyObject *)PyString_FromString(retStr);
+#endif
   return ret;
 }
 
@@ -759,7 +785,7 @@ PyObject * mlabraw_get(PyObject *, PyObject *args)
   PyObject *lDest = NULL;
 
   if (! PyArg_ParseTuple(args, "Os:get", &lHandle, &lName)) return NULL;
-  if (! PyCObject_Check(lHandle)) {
+  if (! PyCapsule_CheckExact(lHandle)) {
     PyErr_SetString(PyExc_TypeError, "Invalid object passed as mlabraw session handle");
     return NULL;
   }
@@ -806,14 +832,19 @@ PyObject * mlabraw_put(PyObject *, PyObject *args)
   mxArray *lArray = NULL;
   //FIXME should make these objects const
   if (! PyArg_ParseTuple(args, "OsO:put", &lHandle, &lName, &lSource)) return NULL;
-  if (! PyCObject_Check(lHandle)) {
+  if (! PyCapsule_CheckExact(lHandle)) {
     PyErr_SetString(PyExc_TypeError, "Invalid object passed as mlabraw session handle");
     return NULL;
   }
   Py_INCREF(lSource);
 
+#ifdef PY3K
+  if (PyUnicode_Check(lSource)) {
+    lArray = char2mx(PyUnicode_AsUTF8String(lSource));
+#else
   if (PyString_Check(lSource)) {
     lArray = char2mx(lSource);
+#endif
   } else {
     lArray = numeric2mx(lSource);
   }
@@ -826,10 +857,10 @@ PyObject * mlabraw_put(PyObject *, PyObject *args)
 
 // for matlab version >= 6.5 (FIXME UNTESTED)
 #ifdef _V6_5_OR_LATER
-  if (engPutVariable((Engine *)PyCObject_AsVoidPtr(lHandle), lName, lArray) != 0) {
+  if (engPutVariable((Engine *)PyCapsule_GetPointer(lHandle, NULL), lName, lArray) != 0) {
 #else
   mxSetName(lArray, lName);
-  if (engPutArray((Engine *)PyCObject_AsVoidPtr(lHandle), lArray) != 0) {
+  if (engPutArray((Engine *)PyCapsule_GetPointer(lHandle, NULL), lArray) != 0) {
 #endif
     PyErr_SetString(mlabraw_error,
                    "Unable to put matrix into MATLAB(TM) workspace");
@@ -841,6 +872,43 @@ PyObject * mlabraw_put(PyObject *, PyObject *args)
   return Py_None;
 }
 
+static const char * DOC = 
+    "Mlabraw -- Low-level MATLAB(tm) Engine Interface\n"
+    "\n"
+    "  open  - Open a MATLAB(tm) engine session\n"
+    "  close - Close a MATLAB(tm) engine session\n"
+    "  eval  - Evaluates a string in the MATLAB(tm) session\n"
+    "  get   - Gets a matrix from the MATLAB(tm) session\n"
+    "  put   - Places a matrix into the MATLAB(tm) session\n"
+    "\n"
+    "The Numeric package must be installed for this module to be used.\n"
+    "\n"
+    "Copyright & Disclaimer\n"
+    "======================\n"
+    "Copyright (c) 2002-2007 Alexander Schmolck <a.schmolck@gmx.net>\n"
+    "\n"
+    "Copyright (c) 1998,1999 Andrew Sterian. All Rights Reserved. mailto: steriana@gvsu.edu\n"
+    "\n"
+    "Copyright (c) 1998,1999 THE REGENTS OF THE UNIVERSITY OF MICHIGAN. ALL RIGHTS RESERVED \n"
+    "\n"
+    "Permission to use, copy, modify, and distribute this software and its\n"
+    "documentation for any purpose and without fee is hereby granted, provided\n"
+    "that the above copyright notices appear in all copies and that both these\n"
+    "copyright notices and this permission notice appear in supporting\n"
+    "documentation, and that the name of The University of Michigan not be used\n"
+    "in advertising or publicity pertaining to distribution of the software\n"
+    "without specific, written prior permission.\n"
+    "\n"
+    "THIS SOFTWARE IS PROVIDED AS IS, WITHOUT REPRESENTATION AS TO ITS FITNESS\n"
+    "FOR ANY PURPOSE, AND WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR\n"
+    "IMPLIED, INCLUDING WITHOUT LIMITATION THE IMPLIED WARRANTIES OF\n"
+    "MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. THE REGENTS OF THE\n"
+    "UNIVERSITY OF MICHIGAN SHALL NOT BE LIABLE FOR ANY DAMAGES, INCLUDING\n"
+    "SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL DAMAGES, WITH RESPECT TO ANY\n"
+    "CLAIM ARISING OUT OF OR IN CONNECTION WITH THE USE OF THE SOFTWARE, EVEN IF\n"
+    "IT HAS BEEN OR IS HEREAFTER ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.\n"
+    "\n";
+
 static PyMethodDef MlabrawMethods[] = {
   { "open",       mlabraw_open,       METH_VARARGS, open_doc },
   { "close",      mlabraw_close,      METH_VARARGS, close_doc },
@@ -851,51 +919,53 @@ static PyMethodDef MlabrawMethods[] = {
   { NULL,         NULL,               0           , NULL}, // sentinel
 };
 
+struct module_state {
+    PyObject *error;
+};
+
+#ifdef PY3K
+    #define GETSTATE(m) ((struct module_state*)PyModule_GetState(m))
+#else
+    #define GETSTATE(m) (&_state)
+    static struct module_state _state;
+#endif
+
+#ifdef PY3K
+    static int myextension_traverse(PyObject *m, visitproc visit, void *arg) {
+        Py_VISIT(GETSTATE(m)->error);
+        return 0;
+    }
+    static int myextension_clear(PyObject *m) {
+        Py_CLEAR(GETSTATE(m)->error);
+        return 0;
+    }
+    static struct PyModuleDef moduledef = {
+        PyModuleDef_HEAD_INIT,
+        "mlabraw",
+        DOC,
+        sizeof(struct module_state),
+        MlabrawMethods,
+        NULL,
+        myextension_traverse,
+        myextension_clear,
+        NULL
+    };
+#endif
+
+#ifdef PY3K
+PyMODINIT_FUNC PyInit_mlabraw(void)
+#else
 PyMODINIT_FUNC initmlabraw(void)
+#endif
 {
+#ifdef PY3K
+    PyObject *module = PyModule_Create(&moduledef);
+#else
   PyObject *module =
-    Py_InitModule4("mlabraw",
+    Py_InitModule3("mlabraw",
       MlabrawMethods,
-"Mlabraw -- Low-level MATLAB(tm) Engine Interface\n"
-"\n"
-"  open  - Open a MATLAB(tm) engine session\n"
-"  close - Close a MATLAB(tm) engine session\n"
-"  eval  - Evaluates a string in the MATLAB(tm) session\n"
-"  get   - Gets a matrix from the MATLAB(tm) session\n"
-"  put   - Places a matrix into the MATLAB(tm) session\n"
-"\n"
-
-
-
-"The Numeric package must be installed for this module to be used.\n"
-"\n"
-"Copyright & Disclaimer\n"
-"======================\n"
-"Copyright (c) 2002-2007 Alexander Schmolck <a.schmolck@gmx.net>\n"
-"\n"
-"Copyright (c) 1998,1999 Andrew Sterian. All Rights Reserved. mailto: steriana@gvsu.edu\n"
-"\n"
-"Copyright (c) 1998,1999 THE REGENTS OF THE UNIVERSITY OF MICHIGAN. ALL RIGHTS RESERVED \n"
-"\n"
-"Permission to use, copy, modify, and distribute this software and its\n"
-"documentation for any purpose and without fee is hereby granted, provided\n"
-"that the above copyright notices appear in all copies and that both these\n"
-"copyright notices and this permission notice appear in supporting\n"
-"documentation, and that the name of The University of Michigan not be used\n"
-"in advertising or publicity pertaining to distribution of the software\n"
-"without specific, written prior permission.\n"
-"\n"
-"THIS SOFTWARE IS PROVIDED AS IS, WITHOUT REPRESENTATION AS TO ITS FITNESS\n"
-"FOR ANY PURPOSE, AND WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR\n"
-"IMPLIED, INCLUDING WITHOUT LIMITATION THE IMPLIED WARRANTIES OF\n"
-"MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE. THE REGENTS OF THE\n"
-"UNIVERSITY OF MICHIGAN SHALL NOT BE LIABLE FOR ANY DAMAGES, INCLUDING\n"
-"SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL DAMAGES, WITH RESPECT TO ANY\n"
-"CLAIM ARISING OUT OF OR IN CONNECTION WITH THE USE OF THE SOFTWARE, EVEN IF\n"
-"IT HAS BEEN OR IS HEREAFTER ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.\n"
-"\n",
-       0,
-       PYTHON_API_VERSION);
+      DOC);
+#endif
 
   /* This macro, defined in arrayobject.h, loads the Numeric API interface */
   import_array();
@@ -903,4 +973,8 @@ PyMODINIT_FUNC initmlabraw(void)
   mlabraw_error = PyErr_NewException("mlabraw.error", NULL, NULL);
   Py_INCREF(mlabraw_error);
   PyModule_AddObject(module, "error", mlabraw_error);
+
+#ifdef PY3K
+  return module;
+#endif
 }
