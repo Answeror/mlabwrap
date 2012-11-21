@@ -10,20 +10,32 @@ Thanks [this site](http://obasic.net/how-to-install-mlabwrap-on-windows), I made
 
 ## Platform
 
-The setup.py is configurated for Windows platform, with Python 2.7.2 **64 bit** and Matlab **64 bit**.
+The setup.py is configurated for Windows platform, with Python3 **32 bit** and Matlab **32 bit**.
 
 ## Installation
 
-Use `build.bat` to install.
+In VS2008 Command Prompt:
 
-## Fixed bugs
+```
+python setup.py bdist_egg --matlab=PATH_TO_YOUR_MATLAB_DOT_EXE
+easy_install dist\xxx.egg
+```
 
-### Cannot delete temporary file
+## Changlog
+
+### 1.1.3 (2012-11-21)
+
+* using system encoding scheme to decode string in `mlabraw.eval`
+* fix memory leak in `mlabraw.put` caused by chained `char2mx` and `PyUnicode_AsUTF8String`
+
+### 1.1.2
+
+#### Cannot delete temporary file
 
 > [Error 32] The process cannot access the file because it is being used by another process:...
 
 mentioned [here](http://obasic.net/how-to-install-mlabwrap-on-windows#comment-11549).
 
-### Unable to extract MATLAB(TM) string
+#### Unable to extract MATLAB(TM) string
 
 When function documentation contains multibyte encoded characters, like Chinese, this error will occur. Because `mxGetString` don't support multibyte encoded characters. I use `mxArrayToString` instead.

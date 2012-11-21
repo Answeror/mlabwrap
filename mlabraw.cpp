@@ -661,6 +661,9 @@ PyObject * mlabraw_eval(PyObject *, PyObject *args)
   char *retStr = buffer;
   PyObject *ret;
   PyObject *lHandle;
+  PyObject *u_ret_str;
+  PyObject *encoded_ret_str;
+
   if (! PyArg_ParseTuple(args, "Os:eval", &lHandle, &lStr)) return NULL;
   if (! PyCapsule_CheckExact(lHandle)) {
     PyErr_SetString(PyExc_TypeError, "Invalid object passed as mlabraw session handle");
@@ -677,7 +680,15 @@ PyObject * mlabraw_eval(PyObject *, PyObject *args)
   engOutputBuffer((Engine *)PyCapsule_GetPointer(lHandle, NULL), retStr, BUFSIZE-1);
   if (engEvalString((Engine *)PyCapsule_GetPointer(lHandle, NULL), cmd) != 0) {
     //std::cout << "DEBUG: RETURN " << retStr << std::endl << std::flush;
+#ifdef PY3K
+    u_ret_str = PyUnicode_DecodeFSDefault(retStr);
+    encoded_ret_str = PyUnicode_AsUTF8String(u_ret_str);
+    PyErr_SetString(mlabraw_error, PyBytes_AsString(encoded_ret_str));
+    Py_DECREF(encoded_ret_str);
+    Py_DECREF(u_ret_str);
+#else
     PyErr_SetString(mlabraw_error, retStr);
+#endif
     return NULL;
   }
   {
@@ -700,13 +711,22 @@ PyObject * mlabraw_eval(PyObject *, PyObject *args)
         PyErr_SetString(mlabraw_error, "THIS SHOULD NOT HAVE HAPPENED!!!");
         return NULL;
       }
+#ifdef PY3K
+    u_ret_str = PyUnicode_DecodeFSDefault(retStr2 + ((strncmp(">> ", retStr2, 3) == 0) ?  3 : 0));
+    encoded_ret_str = PyUnicode_AsUTF8String(u_ret_str);
+    PyErr_SetString(mlabraw_error, PyBytes_AsString(encoded_ret_str));
+    Py_DECREF(encoded_ret_str);
+    Py_DECREF(u_ret_str);
+#else
       PyErr_SetString(mlabraw_error, retStr2 + ((strncmp(">> ", retStr2, 3) == 0) ?  3 : 0));
+#endif
       return NULL;
     }
   }
   if (strncmp(">> ", retStr, 3) == 0) { retStr += 3; } //FIXME
 #ifdef PY3K
-  ret = PyUnicode_FromString(retStr);
+  //ret = PyUnicode_FromString(retStr);
+    ret = PyUnicode_DecodeFSDefault(retStr);
 #else
   ret = (PyObject *)PyString_FromString(retStr);
 #endif
@@ -829,6 +849,7 @@ PyObject * mlabraw_put(PyObject *, PyObject *args)
   char *lName;
   PyObject *lHandle;
   PyObject *lSource;
+  PyObject *encoded_source;
   mxArray *lArray = NULL;
   //FIXME should make these objects const
   if (! PyArg_ParseTuple(args, "OsO:put", &lHandle, &lName, &lSource)) return NULL;
@@ -840,7 +861,9 @@ PyObject * mlabraw_put(PyObject *, PyObject *args)
 
 #ifdef PY3K
   if (PyUnicode_Check(lSource)) {
-    lArray = char2mx(PyUnicode_AsUTF8String(lSource));
+      encoded_source = PyUnicode_AsUTF8String(lSource);
+    lArray = char2mx(encoded_source);
+    Py_DECREF(encoded_source);
 #else
   if (PyString_Check(lSource)) {
     lArray = char2mx(lSource);

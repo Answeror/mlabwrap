@@ -14,6 +14,8 @@ import re
 import tempfile
 import subprocess as sp
 from textwrap import dedent
+from utils import has_option
+from utils import option_value
 
 
 # find executable in PATH
@@ -46,9 +48,10 @@ def find_matlab():
     return None
 
 
-def find_visual_studio():
+def find_visual_studio(exe=None):
     """Try to find VC directory by devenv.exe in PATH."""
-    exe = which('devenv.exe')
+    if exe is None:
+        exe = which('devenv.exe')
     if exe:
         dirname = os.path.dirname
         return os.path.join(dirname(dirname(dirname(exe))), 'VC')
@@ -63,13 +66,20 @@ def find_vc_library_dirs():
     return os.environ['LIB'].split(';')
 
 
-def main(argv):
+def main():
+    __version__ = '1.1.3'
+
+    OPTION_MATLAB = option_value('matlab')
+    OPTION_DEVENV = option_value('devenv')
+
+
     # global variables begin
 
     MATLAB_COMMAND = 'matlab'   # specify a full path if not in PATH
     MATLAB_VERSION = 7.3       # e.g: 6 (one of (6, 6.5, 7, 7.3))
                                 #      7.3 includes later versions as well
-    MATLAB_DIR = find_matlab()
+    #MATLAB_DIR = find_matlab()
+    MATLAB_DIR = os.path.dirname(os.path.dirname(OPTION_MATLAB))
     if not MATLAB_DIR:
         print('You must set environment variable MATLAB_HOME first.')
         return 1
@@ -98,7 +108,7 @@ def main(argv):
     #  instead of VC:
     #
     #VC_DIR=None
-    VC_DIR = find_visual_studio()
+    VC_DIR = find_visual_studio(OPTION_DEVENV)
     #PLATFORM_DIR="win32/borland/bc54"
     PLATFORM = '32'
 
@@ -224,15 +234,15 @@ def main(argv):
     MATLAB_LIBRARY_DIRS = [d for d in MATLAB_LIBRARY_DIRS if d]
 
     setup(  # Distribution meta-data
-           name="mlabwrap",
-           version='1.1.1dev',
-           description="A high-level bridge to matlab",
-           author="Alexander Schmolck",
-           author_email="A.Schmolck@gmx.net",
-           py_modules=["mlabwrap"] + SUPPORT_MODULES,
-           url='http://mlabwrap.sourceforge.net',
-           ext_modules=[
-              Extension(EXTENSION_NAME, ['mlabraw.cpp'],
+            name="mlabwrap",
+            version=__version__,
+            description="A high-level bridge to matlab",
+            author="Alexander Schmolck",
+            author_email="A.Schmolck@gmx.net",
+            py_modules=["mlabwrap"] + SUPPORT_MODULES,
+            url='http://mlabwrap.sourceforge.net',
+            ext_modules=[
+                Extension(EXTENSION_NAME, ['mlabraw.cpp'],
                         define_macros=DEFINE_MACROS,
                         library_dirs=MATLAB_LIBRARY_DIRS,
                         #runtime_library_dirs=MATLAB_LIBRARY_DIRS,
@@ -241,11 +251,9 @@ def main(argv):
                         extra_compile_args=EXTRA_COMPILE_ARGS,
                         ),
             ],
-           use_2to3=True
+            use_2to3=True
         )
 
     return 0
 
-
-if __name__ == '__main__':
-    sys.exit(main(sys.argv[1:]))
+main()
